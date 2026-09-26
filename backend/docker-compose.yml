@@ -1,0 +1,49 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RIVO Backend — Local Development Infrastructure
+# ─────────────────────────────────────────────────────────────────────────────
+# Provides: PostgreSQL + PostGIS, Redis
+# Does NOT include: OTP (run separately), RIVO backend (use uvicorn directly)
+#
+# Start:    docker compose up -d
+# Stop:     docker compose down
+# Reset DB: docker compose down -v && docker compose up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: rivo_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rivo
+      POSTGRES_PASSWORD: rivo_password
+      POSTGRES_DB: rivo_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - rivo_postgres_data:/var/lib/postgresql/data
+      - ./scripts/db_init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rivo -d rivo_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: rivo_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no   # no persistence in dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  rivo_postgres_data:

@@ -1,0 +1,38 @@
+# ─────────────────────────────────────────────────────────────
+# RIVO Backend — Heavy/Optional Extras
+# ─────────────────────────────────────────────────────────────
+# Install AFTER requirements.txt is working.
+# These are NOT required to run the server in mock mode.
+#
+#   pip install --only-binary :all: -r requirements-extras.txt
+#
+# NOTE: Some of these may not have Python 3.14 wheels yet.
+# If install fails, skip and revisit later.
+# ─────────────────────────────────────────────────────────────
+
+# Data processing (may need Python 3.13 or --pre for 3.14)
+pandas>=2.2.2
+polars>=0.20.31
+numpy>=2.0.0              # numpy 1.x has no Python 3.14 wheel; use 2.x
+duckdb>=0.10.3
+
+# Geo / GIS
+geopandas>=1.0.1
+pyproj>=3.6.1
+geopy>=2.4.1
+
+# GTFS parsing
+gtfs-kit>=6.4.0
+
+# ML — rent estimation
+lightgbm>=4.3.0
+xgboost>=2.0.3
+scikit-learn>=1.5.0
+joblib>=1.4.2
+
+# HTTP extras
+aiohttp>=3.9.5
+
+# Auth helpers (optional — for future user authentication)
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4

@@ -1,0 +1,129 @@
+# =============================================================================
+# RIVO (.gitignore) — Root Git Ignore Configuration
+# =============================================================================
+
+# ── 1. Security & Environment Secrets (NEVER push keys or passwords) ───────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.pfx
+
+# ── 2. Python & Virtual Environments ─────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# ── 3. Node.js & Frontend ────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.tsbuildinfo
+
+# ── 4. Databases, Caches & Logs ──────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+backend/data/*.db
+data/*.db
+data/rivo.db
+
+# Logs
+logs/
+*.log
+backend/logs/
+backend/scripts/logs/
+
+# ── 5. Large Raw Datasets & Zip Archives (Prevents GitHub 100MB rejection) ──
+# Raw survey microdata (PLFS raw files are 56MB - 368MB)
+data/seed/Data_in_CSV/
+data/seed/Data_in_JSON/
+backend/data/seed/Data_in_CSV/
+backend/data/seed/Data_in_JSON/
+
+# Large GTFS zip files and heavy transit schedule tables (>50MB)
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+data/seed/gtfs/**/stop_times.txt
+data/seed/gtfs/**/shapes.txt
+backend/data/seed/gtfs/**/stop_times.txt
+backend/data/seed/gtfs/**/shapes.txt
+
+# Preserve essential GTFS reference seed data & sample rentals
+!data/seed/rental_seed.json
+!backend/data/seed/rental_seed.json
+!data/seed/gtfs/**/stops.txt
+!data/seed/gtfs/**/routes.txt
+!data/seed/gtfs/**/agency.txt
+!data/seed/gtfs/**/calendar.txt
+!data/seed/gtfs/**/feed_info.txt
+!data/seed/gtfs/**/frequencies.txt
+
+# ── 6. Operating System & Editor Files ───────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.antigravity/
+.gemini/

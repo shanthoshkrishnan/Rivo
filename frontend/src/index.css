@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --bg-canvas: #FAF8F5;
+    --bg-surface: #FFFFFF;
+    --bg-muted: #F5EFEB;
+    --border-subtle: #EBE4DC;
+    --border-strong: #D9CEBF;
+    --text-primary: #2C2523;
+    --text-secondary: #6B615B;
+    --text-muted: #9E938C;
+    --terracotta-500: #C25E38;
+    --terracotta-600: #AB4E2A;
+    --amber-500: #D9822B;
+    --sage-600: #3E7353;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #FAF8F5;
+    color: #2C2523;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Custom minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF8F5;
+}
+::-webkit-scrollbar-thumb {
+  background: #DDD5CB;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #C4B9AD;
+}
+
+/* Leaflet map customization to fit warm minimalist aesthetic */
+.leaflet-container {
+  font-family: inherit !important;
+  background-color: #F4EFEA !important;
+}
+.leaflet-popup-content-wrapper {
+  background: #FFFFFF !important;
+  color: #2C2523 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px -5px rgba(44, 37, 35, 0.08), 0 8px 10px -6px rgba(44, 37, 35, 0.05) !important;
+  border: 1px solid #EBE4DC !important;
+  padding: 2px !important;
+}
+.leaflet-popup-tip {
+  background: #FFFFFF !important;
+}
+.leaflet-popup-content {
+  margin: 12px 14px !important;
+  line-height: 1.4 !important;
+}
