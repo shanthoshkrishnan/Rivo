@@ -73,14 +73,26 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """
     Run migrations in 'online' mode.
-    Connects to the DB and applies migrations directly.
+    Connects to PostgreSQL if available, otherwise falls back to local SQLite.
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-    with connectable.connect() as connection:
+    connection = None
+    try:
+        connectable = engine_from_config(
+            config.get_section(config.config_ini_section, {}),
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        )
+        connection = connectable.connect()
+    except Exception:
+        # Fall back to local SQLite database in dev
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        db_path = os.path.join(base_dir, "data", "rivo.db")
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        from sqlalchemy import create_engine
+        connectable = create_engine(f"sqlite:///{db_path}", poolclass=pool.NullPool)
+        connection = connectable.connect()
+
+    with connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

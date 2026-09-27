@@ -24,8 +24,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.schemas.recommendation import RecommendationRequest, RecommendationResponse
-from app.services.providers.registry import get_rental_provider, get_route_provider
+from app.schemas.recommendation import (
+    RecommendationDetailRequest,
+    RecommendationDetailResponse,
+    RecommendationRequest,
+    RecommendationResponse,
+)
+from app.services.providers.registry import (
+    get_places_provider,
+    get_rental_provider,
+    get_route_provider,
+)
 from app.services.recommendation_service import RecommendationService
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
@@ -49,6 +58,31 @@ async def recommendations_search(
     service = RecommendationService(
         rental_provider=get_rental_provider(),
         route_provider=get_route_provider(),
+        places_provider=get_places_provider(),
         db=db,
     )
     return await service.search(request)
+
+
+@router.post(
+    "/detail",
+    response_model=RecommendationDetailResponse,
+    summary="Get detailed live travel & family plan for a selected home",
+    description=(
+        "Run deep live evaluation for a single selected home: "
+        "multimodal transit itinerary, multi-mode road comparison, live family facilities, "
+        "and truthful data provenance."
+    ),
+)
+async def recommendations_detail(
+    request: RecommendationDetailRequest,
+    db: AsyncSession | None = Depends(get_db),
+) -> RecommendationDetailResponse:
+    service = RecommendationService(
+        rental_provider=get_rental_provider(),
+        route_provider=get_route_provider(),
+        places_provider=get_places_provider(),
+        db=db,
+    )
+    return await service.detail(request)
+

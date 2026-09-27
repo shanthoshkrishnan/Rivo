@@ -30,7 +30,8 @@ from sqlalchemy.orm import Session
 from app.db.session import sync_engine
 from app.models.worker import WorkerProfile, IncomeProfile
 from app.models.data_source import DataSource
-from app.models.routing import TransitStop
+from app.models.routing import TransitStop, TransitFare
+from app.utils.spatial import lat_lng_to_h3
 from app.core.logging import configure_logging, logger
 
 configure_logging()
@@ -212,12 +213,15 @@ def seed_gtfs_stops(session: Session) -> int:
                     if stop_id in existing_stop_ids:
                         continue
                     try:
+                        stop_lat_f = float(lat)
+                        stop_lon_f = float(lon)
                         stop = TransitStop(
                             stop_id=stop_id,
                             stop_name=stop_name,
-                            stop_lat=float(lat),
-                            stop_lon=float(lon),
+                            stop_lat=stop_lat_f,
+                            stop_lon=stop_lon_f,
                             stop_code=row.get("stop_code"),
+                            h3_index=lat_lng_to_h3(stop_lat_f, stop_lon_f, resolution=9),
                         )
                         batch.append(stop)
                         existing_stop_ids.add(stop_id)
@@ -241,6 +245,52 @@ def seed_gtfs_stops(session: Session) -> int:
     return total_loaded
 
 
+def seed_transit_fares(session: Session) -> int:
+    """Seed MTC and CMRL transit fare structures based on official published tables."""
+    fares = [
+        # MTC Bus ordinary
+        dict(operator="MTC", distance_min_km=0.0, distance_max_km=2.0, fare_inr=5.0, fare_type="ordinary",
+             source_name="MTC Fares", source_url="https://mtcbus.tn.gov.in/Home/fares"),
+        dict(operator="MTC", distance_min_km=2.0, distance_max_km=4.0, fare_inr=7.0, fare_type="ordinary",
+             source_name="MTC Fares", source_url="https://mtcbus.tn.gov.in/Home/fares"),
+        dict(operator="MTC", distance_min_km=4.0, distance_max_km=6.0, fare_inr=9.0, fare_type="ordinary",
+             source_name="MTC Fares", source_url="https://mtcbus.tn.gov.in/Home/fares"),
+        dict(operator="MTC", distance_min_km=6.0, distance_max_km=10.0, fare_inr=11.0, fare_type="ordinary",
+             source_name="MTC Fares", source_url="https://mtcbus.tn.gov.in/Home/fares"),
+        dict(operator="MTC", distance_min_km=10.0, distance_max_km=15.0, fare_inr=14.0, fare_type="ordinary",
+             source_name="MTC Fares", source_url="https://mtcbus.tn.gov.in/Home/fares"),
+        dict(operator="MTC", distance_min_km=15.0, distance_max_km=20.0, fare_inr=17.0, fare_type="ordinary",
+             source_name="MTC Fares", source_url="https://mtcbus.tn.gov.in/Home/fares"),
+        dict(operator="MTC", distance_min_km=20.0, distance_max_km=60.0, fare_inr=22.0, fare_type="ordinary",
+             source_name="MTC Fares", source_url="https://mtcbus.tn.gov.in/Home/fares"),
+        # CMRL Metro
+        dict(operator="CMRL", distance_min_km=0.0, distance_max_km=2.0, fare_inr=10.0, fare_type="metro",
+             source_name="CMRL Fare Calculator", source_url="https://chennaimetrorail.org/fare-calculator/"),
+        dict(operator="CMRL", distance_min_km=2.0, distance_max_km=4.0, fare_inr=20.0, fare_type="metro",
+             source_name="CMRL Fare Calculator", source_url="https://chennaimetrorail.org/fare-calculator/"),
+        dict(operator="CMRL", distance_min_km=4.0, distance_max_km=6.0, fare_inr=30.0, fare_type="metro",
+             source_name="CMRL Fare Calculator", source_url="https://chennaimetrorail.org/fare-calculator/"),
+        dict(operator="CMRL", distance_min_km=6.0, distance_max_km=12.0, fare_inr=40.0, fare_type="metro",
+             source_name="CMRL Fare Calculator", source_url="https://chennaimetrorail.org/fare-calculator/"),
+        dict(operator="CMRL", distance_min_km=12.0, distance_max_km=21.0, fare_inr=50.0, fare_type="metro",
+             source_name="CMRL Fare Calculator", source_url="https://chennaimetrorail.org/fare-calculator/"),
+        dict(operator="CMRL", distance_min_km=21.0, distance_max_km=60.0, fare_inr=60.0, fare_type="metro",
+             source_name="CMRL Fare Calculator", source_url="https://chennaimetrorail.org/fare-calculator/"),
+    ]
+    count = 0
+    for f in fares:
+        existing = session.query(TransitFare).filter_by(
+            operator=f["operator"],
+            fare_type=f["fare_type"],
+            distance_min_km=f["distance_min_km"]
+        ).first()
+        if not existing:
+            session.add(TransitFare(**f, effective_date=datetime.now(timezone.utc)))
+            count += 1
+    session.commit()
+    return count
+
+
 def main() -> None:
     logger.info("Starting RIVO seed data script...")
     engine = get_target_engine()
@@ -250,17 +300,29 @@ def main() -> None:
     IncomeProfile.__table__.create(bind=engine, checkfirst=True)
     DataSource.__table__.create(bind=engine, checkfirst=True)
     TransitStop.__table__.create(bind=engine, checkfirst=True)
+    TransitFare.__table__.create(bind=engine, checkfirst=True)
 
     with Session(engine) as session:
         new_occ = seed_occupations(session)
         new_inc = seed_income_profiles(session)
         new_src = seed_data_sources(session)
         new_gtfs = seed_gtfs_stops(session)
+        new_fares = seed_transit_fares(session)
+
+        # Seed facilities (schools, hospitals, pharmacies)
+        try:
+            from scripts.ingest_facilities import process_facilities, save_fixtures, seed_database as seed_facilities_db
+            fac_data = process_facilities()
+            save_fixtures(fac_data)
+            seed_facilities_db(fac_data)
+        except Exception as fac_err:
+            logger.warning(f"Could not seed facilities: {fac_err}")
 
         tot_occ = session.query(WorkerProfile).count()
         tot_inc = session.query(IncomeProfile).count()
         tot_src = session.query(DataSource).count()
         tot_gtfs = session.query(TransitStop).count()
+        tot_fares = session.query(TransitFare).count()
 
     logger.info(
         f"✓ Database Ready & Seeded: {tot_occ} occupations, {tot_inc} PLFS income profiles, "

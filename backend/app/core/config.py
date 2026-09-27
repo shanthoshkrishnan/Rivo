@@ -51,11 +51,48 @@ class ConfidenceLevel(str, Enum):
     LOW = "LOW"
 
 
+class AvailabilityStatus(str, Enum):
+    """Rental availability state."""
+    AVAILABLE = "AVAILABLE"
+    PENDING_CONFIRMATION = "PENDING_CONFIRMATION"
+    RECENTLY_SEEN = "RECENTLY_SEEN"
+    UNAVAILABLE = "UNAVAILABLE"
+    UNKNOWN = "UNKNOWN"
+
+
+class VerificationStatus(str, Enum):
+    """Rental verification level."""
+    UNVERIFIED = "UNVERIFIED"
+    LOCATION_VERIFIED = "LOCATION_VERIFIED"
+    OWNER_ATTESTED = "OWNER_ATTESTED"
+    RIVO_VERIFIED = "RIVO_VERIFIED"
+
+
 class RentalProviderName(str, Enum):
     MOCK = "mock"
     OPEN_DATASET = "open_dataset"
     LICENSED = "licensed"
     AUTHORIZED_THIRD_PARTY = "authorized_third_party"
+    RIVO_DIRECT = "rivo_direct"
+    AUTHORIZED_PARTNER = "authorized_partner"
+
+
+class LiveApiDisabledError(Exception):
+    """Raised when a live external Google API call is attempted while RIVO_LIVE_API_TESTS=False."""
+    pass
+
+
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+_REPO_ROOT = _BACKEND_DIR.parent
+_CANONICAL_BACKEND_ENV = _BACKEND_DIR / ".env"
+_CANONICAL_ROOT_ENV = _REPO_ROOT / ".env"
+
+# Explicitly load backend/.env into environment if present
+from dotenv import load_dotenv
+if _CANONICAL_BACKEND_ENV.exists():
+    load_dotenv(dotenv_path=_CANONICAL_BACKEND_ENV, override=False)
+if _CANONICAL_ROOT_ENV.exists():
+    load_dotenv(dotenv_path=_CANONICAL_ROOT_ENV, override=False)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,15 +102,21 @@ class Settings(BaseSettings):
     """
     Central settings object.  Uses Pydantic-Settings to load from:
       1. Environment variables (highest priority)
-      2. .env file in the current working directory
-      3. Defaults defined below
+      2. backend/.env (canonical backend configuration)
+      3. Repo root .env (if present)
+      4. .env in the current working directory
+      5. Defaults defined below
 
     All fields are validated at import time; the application refuses to start
     if a required setting is absent or malformed.
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[
+            str(_CANONICAL_ROOT_ENV),
+            str(_CANONICAL_BACKEND_ENV),
+            ".env",
+        ],
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -106,6 +149,7 @@ class Settings(BaseSettings):
     # ── Routing providers ────────────────────────────────────────────────────
     GOOGLE_ROUTES_API_KEY: str = ""          # blank → skip Google routing
     OTP_BASE_URL: str = "http://localhost:8080/otp"
+    OTP_ENABLED: bool = False
 
     # ── Rental provider ──────────────────────────────────────────────────────
     RENTAL_PROVIDER: RentalProviderName = RentalProviderName.MOCK
@@ -114,6 +158,18 @@ class Settings(BaseSettings):
 
     # ── Places / Facilities ──────────────────────────────────────────────────
     GOOGLE_PLACES_API_KEY: str = ""          # blank → OSM-only mode
+
+    # ── Live API Safety Switch & Quota Budgets ───────────────────────────────
+    # When False, live Google HTTP requests are blocked to preserve quota during development.
+    RIVO_LIVE_API_TESTS: bool = False
+    ROUTE_SEARCH_BUDGET: int = 10
+    PLACES_SEARCH_BUDGET: int = 8
+    DETAILED_ROUTE_BUDGET: int = 5
+    FAMILY_ROUTE_BUDGET: int = 6
+
+    # ── Rental Inventory Budgets & Refresh ────────────────────────────────────
+    RENTAL_REFRESH_BUDGET: int = 50
+    RENTAL_PROVIDER_TTL: int = 86400  # 24 hours in seconds
 
     # ── Fuel prices (updated periodically; override via env/DB) ──────────────
     DEFAULT_PETROL_PRICE_INR: float = 105.0
@@ -152,11 +208,11 @@ class Settings(BaseSettings):
 
     @property
     def google_routes_enabled(self) -> bool:
-        return bool(self.GOOGLE_ROUTES_API_KEY)
+        return bool(self.GOOGLE_ROUTES_API_KEY and self.GOOGLE_ROUTES_API_KEY.strip())
 
     @property
     def google_places_enabled(self) -> bool:
-        return bool(self.GOOGLE_PLACES_API_KEY)
+        return bool(self.GOOGLE_PLACES_API_KEY and self.GOOGLE_PLACES_API_KEY.strip())
 
 
 @lru_cache(maxsize=1)

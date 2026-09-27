@@ -23,8 +23,11 @@ H3:
 OpenTripPlanner:
 - open-source; include notices
 
-Google Maps Platform:
-- follow current Maps Platform terms, billing and caching restrictions
+Google Maps Platform (Routes API v2 & Places API New):
+- follow current Maps Platform terms, billing and caching restrictions (Section 3.2.3)
+- only request necessary attributes via X-Goog-FieldMask (no photos, reviews, or unnecessary personal data)
+- transient route/places cache limited to permitted TTL (30-60m); never store content indefinitely
+- cached results must strictly be displayed as RECENT, never LIVE
 
 PLFS:
 - follow government microdata access/usage terms

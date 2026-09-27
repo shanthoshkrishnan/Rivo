@@ -246,6 +246,7 @@ class MockRentalProvider(RentalProvider):
             city="Chennai",
             locality_raw=raw.get("locality_raw"),
             locality_normalized=raw.get("locality_normalized"),
+            address_raw=raw.get("address"),
             latitude=raw.get("latitude"),
             longitude=raw.get("longitude"),
             rent_monthly=raw.get("rent_monthly"),
@@ -261,7 +262,7 @@ class MockRentalProvider(RentalProvider):
             observed_at=datetime.now(timezone.utc),
             first_seen_at=datetime.now(timezone.utc),
             last_seen_at=datetime.now(timezone.utc),
-            source_name="RIVO Sample Data",
+            source_name="Demo / seeded dataset (240 properties)",
             source_url=None,
             data_freshness=DataFreshness.PERIODIC,
         )
@@ -292,6 +293,8 @@ class MockRentalProvider(RentalProvider):
                 continue
             # 4. Hard rent budget
             rent = raw.get("rent_monthly", 0) or 0
+            if params.min_rent_monthly is not None and rent < params.min_rent_monthly:
+                continue
             if rent > params.max_rent_monthly:
                 continue
             # 5. Locality filter (partial match)

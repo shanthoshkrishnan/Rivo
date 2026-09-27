@@ -37,21 +37,74 @@ from app.core.config import get_settings
 from app.core.logging import logger
 
 
+# Safely handle SQLite fallback when SpatiaLite extension is not installed
+try:
+    from geoalchemy2.admin.dialects import sqlite as _sqlite_admin
+    _orig_after_create = _sqlite_admin.after_create
+    _orig_before_drop = _sqlite_admin.before_drop
+
+    def _safe_sqlite_after_create(table, bind, **kw):
+        try:
+            _orig_after_create(table, bind, **kw)
+        except Exception:
+            pass
+
+    def _safe_sqlite_before_drop(table, bind, **kw):
+        try:
+            _orig_before_drop(table, bind, **kw)
+        except Exception:
+            pass
+
+    _sqlite_admin.after_create = _safe_sqlite_after_create
+    _sqlite_admin.before_drop = _safe_sqlite_before_drop
+except (ImportError, AttributeError):
+    pass
+
+from sqlalchemy import event, Engine
+
+@event.listens_for(Engine, "connect")
+def _setup_sqlite_functions(dbapi_connection, connection_record):
+    """Register dummy PostGIS functions on SQLite connections so ORM queries don't fail."""
+    if hasattr(dbapi_connection, "create_function"):
+        try:
+            dbapi_connection.create_function("AsEWKB", 1, lambda x: x)
+            dbapi_connection.create_function("GeomFromEWKT", 1, lambda x: x)
+            dbapi_connection.create_function("ST_GeomFromText", 1, lambda x: x)
+            dbapi_connection.create_function("ST_GeomFromText", 2, lambda x, srid: x)
+            dbapi_connection.create_function("ST_SetSRID", 2, lambda x, srid: x)
+            dbapi_connection.create_function("ST_MakePoint", 2, lambda x, y: f"POINT({x} {y})")
+            dbapi_connection.create_function("RecoverGeometryColumn", 5, lambda *a: 1)
+            dbapi_connection.create_function("ST_Distance", 2, lambda a, b: 0.0)
+            dbapi_connection.create_function("ST_DWithin", 3, lambda a, b, c: 1)
+        except Exception:
+            pass
+
 settings = get_settings()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Async engine  (FastAPI / application runtime)
 # ─────────────────────────────────────────────────────────────────────────────
-async_engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.APP_ENV == "development",   # SQL log in dev only
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,           # drop stale connections before use
-    pool_recycle=1800,            # recycle every 30 min
-    future=True,
-)
+_async_url = settings.DATABASE_URL
+if _async_url.startswith("sqlite://"):
+    _async_url = _async_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+
+if "sqlite" in _async_url:
+    async_engine = create_async_engine(
+        _async_url,
+        echo=False,
+        future=True,
+    )
+else:
+    async_engine = create_async_engine(
+        _async_url,
+        echo=settings.APP_ENV == "development",   # SQL log in dev only
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,           # drop stale connections before use
+        pool_recycle=1800,            # recycle every 30 min
+        future=True,
+    )
 
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
@@ -65,12 +118,23 @@ AsyncSessionLocal = async_sessionmaker(
 # ─────────────────────────────────────────────────────────────────────────────
 # Sync engine  (Alembic, scripts, ML training)
 # ─────────────────────────────────────────────────────────────────────────────
-sync_engine = create_engine(
-    settings.DATABASE_SYNC_URL,
-    echo=False,
-    pool_pre_ping=True,
-    future=True,
-)
+_sync_url = settings.DATABASE_SYNC_URL
+if _sync_url.startswith("sqlite+aiosqlite://"):
+    _sync_url = _sync_url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+
+if "sqlite" in _sync_url:
+    sync_engine = create_engine(
+        _sync_url,
+        echo=False,
+        future=True,
+    )
+else:
+    sync_engine = create_engine(
+        _sync_url,
+        echo=False,
+        pool_pre_ping=True,
+        future=True,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────

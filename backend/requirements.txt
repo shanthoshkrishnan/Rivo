@@ -25,6 +25,7 @@ sqlalchemy>=2.0.31,<2.1
 alembic>=1.13.2
 asyncpg>=0.29.0           # async PostgreSQL driver
 psycopg2-binary==2.9.13   # sync driver — 2.9.13 is first with Python 3.14 wheel
+aiosqlite>=0.20.0         # async SQLite driver (fallback dev database)
 geoalchemy2>=0.15.2       # PostGIS geometry types
 
 # Spatial / H3

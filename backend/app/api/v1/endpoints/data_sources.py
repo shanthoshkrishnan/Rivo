@@ -56,6 +56,22 @@ async def list_data_sources(
     return _default_sources()
 
 
+@router.post(
+    "/refresh",
+    summary="Refresh and reconcile data pipeline (Task 8)",
+    description=(
+        "Refreshes rental candidates, validates Places cache, and audits GTFS transit metadata. "
+        "Pipeline: NEW DATA -> VALIDATE -> DEDUPLICATE -> UPSERT -> MARK OBSERVED_AT."
+    ),
+)
+async def refresh_data_endpoint(
+    db: AsyncSession | None = Depends(get_db),
+):
+    from app.services.data_refresh_service import DataRefreshService
+    service = DataRefreshService(db=db)
+    return await service.refresh_all()
+
+
 def _default_sources() -> List[DataSourceOut]:
     """
     Hardcoded data source registry based on DATA_LICENSES.md and DATA_SOURCES.md.

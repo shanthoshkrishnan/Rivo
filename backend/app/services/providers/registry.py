@@ -22,9 +22,10 @@ from functools import lru_cache
 
 from app.core.config import RentalProviderName, get_settings
 from app.core.logging import logger
-from app.services.providers.base import RentalProvider, RouteProvider
+from app.services.providers.base import PlacesProvider, RentalProvider, RouteProvider
 from app.services.providers.rental_mock import MockRentalProvider
 from app.services.providers.route_google import GoogleRouteProvider, ProviderUnavailableError
+from app.services.providers.route_gtfs import GTFSRouteProvider
 from app.services.providers.route_mock import MockRouteProvider
 from app.services.providers.route_otp import OTPRouteProvider
 
@@ -35,40 +36,20 @@ settings = get_settings()
 def get_rental_provider() -> RentalProvider:
     """
     Return the configured rental provider singleton.
-    Falls back to MockRentalProvider if configuration is incomplete.
+    Defaults to RentalProviderRegistry (composite multi-tier provider)
+    which prioritizes direct owner listings, licensed feeds, and periodic seed data.
     """
-    provider_name = settings.RENTAL_PROVIDER
+    from app.services.providers.rental_registry import rental_registry
+    return rental_registry
 
-    if provider_name == RentalProviderName.MOCK:
-        logger.info("Rental provider: Mock (sample data)")
-        return MockRentalProvider()
 
-    if provider_name == RentalProviderName.OPEN_DATASET:
-        try:
-            from app.services.providers.rental_open_dataset import OpenDatasetRentalProvider
-            logger.info("Rental provider: OpenDataset")
-            return OpenDatasetRentalProvider()
-        except ImportError:
-            logger.warning("OpenDatasetRentalProvider not available; falling back to Mock")
-            return MockRentalProvider()
-
-    if provider_name in (RentalProviderName.LICENSED, RentalProviderName.AUTHORIZED_THIRD_PARTY):
-        if not settings.LICENSED_RENTAL_API_KEY:
-            logger.warning(
-                "Licensed rental provider selected but API key missing; "
-                "falling back to Mock"
-            )
-            return MockRentalProvider()
-        try:
-            from app.services.providers.rental_licensed import LicensedRentalProvider
-            logger.info("Rental provider: Licensed")
-            return LicensedRentalProvider()
-        except ImportError:
-            logger.warning("LicensedRentalProvider not available; falling back to Mock")
-            return MockRentalProvider()
-
-    logger.warning("Unknown rental provider %s; falling back to Mock", provider_name)
-    return MockRentalProvider()
+def get_places_provider() -> PlacesProvider:
+    """
+    Return Google Places provider singleton or instance.
+    is_available() reflects whether GOOGLE_PLACES_API_KEY is configured.
+    """
+    from app.services.providers.places_google import GooglePlacesProvider
+    return GooglePlacesProvider()
 
 
 def get_route_provider() -> RouteProvider:
@@ -92,13 +73,16 @@ class CompositeRouteProvider(RouteProvider):
 
     def __init__(self) -> None:
         self._providers: list[RouteProvider] = []
-        if settings.google_routes_enabled:
-            self._providers.append(GoogleRouteProvider())
-            logger.info("Route provider chain: Google → OTP → Mock")
-        else:
-            logger.info("Route provider chain: OTP → Mock (Google key not set)")
+        # Google is always candidate #1; is_available() dynamically gates execution
+        self._providers.append(GoogleRouteProvider())
+        self._providers.append(GTFSRouteProvider())
         self._providers.append(OTPRouteProvider())
         self._providers.append(MockRouteProvider())
+        current_settings = get_settings()
+        if current_settings.google_routes_enabled:
+            logger.info("[ROUTE PROVIDER] selected=google reason=api_configured chain=Google → GTFS → OTP → Mock")
+        else:
+            logger.info("[ROUTE PROVIDER] selected=gtfs reason=google_not_configured chain=GTFS → OTP → Mock")
 
     @property
     def provider_name(self) -> str:
@@ -116,6 +100,12 @@ class CompositeRouteProvider(RouteProvider):
             try:
                 if not provider.is_available():
                     continue
+                logger.info(
+                    "[ROUTE PROVIDER] selected=%s reason=%s modes=%s",
+                    provider.provider_name,
+                    "api_configured" if provider.provider_name == "google" else "chain_order",
+                    request.modes,
+                )
                 results = await provider.compute_route(request)
                 if results:
                     return results

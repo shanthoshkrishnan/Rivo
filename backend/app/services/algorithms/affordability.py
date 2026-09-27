@@ -162,6 +162,7 @@ def check_hard_constraints(
     is_available: bool,
     commute_minutes: Optional[float],
     max_commute_minutes: Optional[int],
+    min_rent_monthly: Optional[float] = None,
 ) -> HardConstraintResult:
     """
     §16: Reject listings that violate hard constraints.
@@ -182,8 +183,11 @@ def check_hard_constraints(
         failures.append(f"property_type_mismatch (got {property_type}, need {required_property_type})")
     if required_bhk is not None and bhk != required_bhk:
         failures.append(f"bhk_mismatch (got {bhk}, need {required_bhk})")
-    if rent_monthly is not None and rent_monthly > max_rent_monthly:
-        failures.append(f"rent_exceeds_budget ({rent_monthly:.0f} > {max_rent_monthly:.0f})")
+    if rent_monthly is not None:
+        if min_rent_monthly is not None and rent_monthly < min_rent_monthly:
+            failures.append(f"rent_below_minimum ({rent_monthly:.0f} < {min_rent_monthly:.0f})")
+        if rent_monthly > max_rent_monthly:
+            failures.append(f"rent_exceeds_budget ({rent_monthly:.0f} > {max_rent_monthly:.0f})")
     if (
         commute_minutes is not None
         and max_commute_minutes is not None
@@ -266,17 +270,20 @@ def compute_family_score(
     school_fits: Optional[bool],
     hospital_fits: Optional[bool],
     pharmacy_fits: Optional[bool],
+    thresholds_set: bool = False,
 ) -> float:
     """
     Average binary fit across required facilities.
-    None means no threshold was set (not evaluated → counts as 1.0).
+    If thresholds were requested by the user but facility data was missing for all,
+    returns 0.3 (insufficient data penalty) rather than a false 1.0 pass.
+    If no thresholds were requested, returns 1.0.
     """
     votes = []
     for fit in (school_fits, hospital_fits, pharmacy_fits):
         if fit is not None:
             votes.append(1.0 if fit else 0.0)
     if not votes:
-        return 1.0
+        return 0.3 if thresholds_set else 1.0
     return round(sum(votes) / len(votes), 4)
 
 

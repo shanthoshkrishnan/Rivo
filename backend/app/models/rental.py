@@ -134,3 +134,82 @@ class RentalListing(Base):
             f"listing_id={self.listing_id!r} "
             f"bhk={self.bhk} rent={self.rent_monthly}>"
         )
+
+
+class RentalObservation(Base):
+    """
+    Empirical rental price observation over time.
+    Preserves raw asking rents, source provenance, and model eligibility.
+    """
+    __tablename__ = "rental_observations"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    listing_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    rent_monthly: Mapped[float] = mapped_column(Float, nullable=False)
+    rent_monthly_raw: Mapped[Optional[float]] = mapped_column(Float)
+    availability_status: Mapped[str] = mapped_column(String(32), nullable=False, default="AVAILABLE")
+    locality: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    bhk: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    area_sqft: Mapped[Optional[float]] = mapped_column(Float)
+    furnishing: Mapped[Optional[str]] = mapped_column(String(32))
+    property_type: Mapped[Optional[str]] = mapped_column(String(64))
+    latitude: Mapped[Optional[float]] = mapped_column(Float)
+    longitude: Mapped[Optional[float]] = mapped_column(Float)
+    h3_index: Mapped[Optional[str]] = mapped_column(String(20), index=True)
+    source: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+
+    # Dataset flags
+    is_synthetic: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_periodic: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False)
+    eligible_for_model: Mapped[bool] = mapped_column(Boolean, default=False)
+    changed_fields: Mapped[Optional[str]] = mapped_column(String(256))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<RentalObservation listing_id={self.listing_id!r} "
+            f"rent={self.rent_monthly} eligible={self.eligible_for_model}>"
+        )
+
+
+class RentCell(Base):
+    """
+    Spatial rent surface aggregated at H3 hexagon resolution.
+    Stores empirical or model-derived percentile distributions (p25, p50, p75).
+    """
+    __tablename__ = "rent_cells"
+
+    h3_index: Mapped[str] = mapped_column(String(20), primary_key=True)
+    resolution: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    locality: Mapped[Optional[str]] = mapped_column(String(256), index=True)
+
+    rent_p25: Mapped[Optional[float]] = mapped_column(Float)
+    rent_p50: Mapped[Optional[float]] = mapped_column(Float)
+    rent_p75: Mapped[Optional[float]] = mapped_column(Float)
+    price_per_sqft_median: Mapped[Optional[float]] = mapped_column(Float)
+
+    observation_count: Mapped[int] = mapped_column(Integer, default=0)
+    unique_properties: Mapped[int] = mapped_column(Integer, default=0)
+    source_count: Mapped[int] = mapped_column(Integer, default=0)
+    latest_observation: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    confidence: Mapped[str] = mapped_column(String(32), default="INSUFFICIENT_DATA")
+    model_version: Mapped[str] = mapped_column(String(64), default="none")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<RentCell h3={self.h3_index!r} p50={self.rent_p50} "
+            f"conf={self.confidence}>"
+        )
+

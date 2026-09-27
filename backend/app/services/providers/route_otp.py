@@ -92,32 +92,30 @@ class OTPRouteProvider(RouteProvider):
     def __init__(self) -> None:
         self._base_url = settings.OTP_BASE_URL.rstrip("/")
         self._graphql_url = f"{self._base_url}/routers/default/index/graphql"
+        self._available: bool = True
 
     @property
     def provider_name(self) -> str:
         return self.PROVIDER_NAME
 
     def is_available(self) -> bool:
-        # Optimistic: we check lazily on first request
-        return True
+        return bool(settings.OTP_ENABLED and self._available)
 
     def supports_mode(self, mode: str) -> bool:
         return mode.upper() in self.SUPPORTED_MODES
 
-    @retry(
-        retry=retry_if_exception_type(httpx.HTTPError),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=1, max=8),
-        reraise=True,
-    )
     async def _call_otp(self, variables: Dict[str, Any]) -> Dict:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                self._graphql_url,
-                json={"query": _OTP_GRAPHQL_QUERY, "variables": variables},
-            )
-            resp.raise_for_status()
-            return resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.post(
+                    self._graphql_url,
+                    json={"query": _OTP_GRAPHQL_QUERY, "variables": variables},
+                )
+                resp.raise_for_status()
+                return resp.json()
+        except Exception:
+            self._available = False
+            raise
 
     def _parse_itinerary(
         self, itinerary: Dict, mode: str
@@ -208,6 +206,7 @@ class OTPRouteProvider(RouteProvider):
                         )
                         results.append(result)
             except Exception as exc:
+                self._available = False
                 logger.error("OTP routing error", mode=mode_upper, error=str(exc))
                 # Don't raise; return partial results and let caller handle fallback
 

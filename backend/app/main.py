@@ -43,12 +43,30 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic."""
     configure_logging()
+
+    # ── Phase 3: API configuration diagnostic (keys never logged) ─────────────
+    google_routes_status = "CONFIGURED" if settings.google_routes_enabled else "NOT CONFIGURED"
+    google_places_status = "CONFIGURED" if settings.google_places_enabled else "NOT CONFIGURED"
+
     logger.info(
         "RIVO Backend starting",
         env=settings.APP_ENV,
         rental_provider=settings.RENTAL_PROVIDER,
-        google_routes=settings.google_routes_enabled,
     )
+    logger.info(f"Google Routes: {google_routes_status}")
+    logger.info(f"Google Places: {google_places_status}")
+
+    if not settings.google_routes_enabled:
+        logger.warning(
+            "Google Routes API key not set — routing will use GTFS → OTP → Mock fallback. "
+            "Set GOOGLE_ROUTES_API_KEY in .env to enable live transit routing."
+        )
+    if not settings.google_places_enabled:
+        logger.warning(
+            "Google Places API key not set — facility discovery will use local verified seed data. "
+            "Set GOOGLE_PLACES_API_KEY in .env to enable live facility search."
+        )
+
     # Warm up Redis connection
     await get_redis()
     yield
@@ -86,12 +104,23 @@ def create_app() -> FastAPI:
     # ── Health check ──────────────────────────────────────────────────────────
     @app.get("/health", tags=["health"])
     async def health_check():
+        from app.core.circuit_breaker import circuit_breaker
+        routes_info = circuit_breaker.get_routes_status()
+        places_info = circuit_breaker.get_places_status()
         return {
             "status": "ok",
             "env": settings.APP_ENV,
             "version": settings.APP_VERSION,
             "rental_provider": settings.RENTAL_PROVIDER,
-            "google_routes_enabled": settings.google_routes_enabled,
+            "google_routes": "CONFIGURED" if settings.google_routes_enabled else "NOT CONFIGURED",
+            "google_places": "CONFIGURED" if settings.google_places_enabled else "NOT CONFIGURED",
+            "google_routes_available": routes_info["available"],
+            "google_places_available": places_info["available"],
+            "google_routes_failure_reason": routes_info["reason"],
+            "google_places_failure_reason": places_info["reason"],
+            "google_status": routes_info["reason"] if not routes_info["available"] else "AVAILABLE",
+            "fallback_provider": "gtfs",
+            "message": routes_info.get("message") if not routes_info["available"] else "OK",
         }
 
     # ── Root ──────────────────────────────────────────────────────────────────

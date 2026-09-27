@@ -50,6 +50,9 @@ https://github.com/opentripplanner/OpenTripPlanner
 Google Routes:
 https://developers.google.com/maps/documentation/routes/
 
+Google Places (New):
+https://developers.google.com/maps/documentation/places/web-service/nearby-search
+
 ## Rental data policy
 Do not create a direct scraper unless the source terms/permission permit it.
 

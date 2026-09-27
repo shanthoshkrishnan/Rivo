@@ -70,6 +70,18 @@ class RentalProvider(ABC):
     def is_available(self) -> bool:
         """Returns True if the provider is currently reachable."""
 
+    def health(self) -> dict:
+        """Health and capability metadata."""
+        return {
+            "provider": self.provider_name,
+            "available": self.is_available(),
+            "freshness": self.freshness().value,
+        }
+
+    def freshness(self) -> DataFreshness:
+        """Default freshness tier for this provider."""
+        return DataFreshness.PERIODIC
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Route Provider

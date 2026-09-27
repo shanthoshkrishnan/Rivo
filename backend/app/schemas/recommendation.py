@@ -24,7 +24,9 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from app.core.config import ConfidenceLevel, DataFreshness
+from app.schemas.ml import MarketComparison
 from app.schemas.routing import RouteResult
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -66,6 +68,7 @@ class RecommendationRequest(BaseModel):
     before any expensive operation.
     """
     # ── Hard constraints ──────────────────────────────────────────────────────
+    min_rent_monthly: Optional[float] = Field(None, ge=0, description="Hard minimum rent (INR)")
     max_rent_monthly: float = Field(..., gt=0, description="Hard maximum rent (INR)")
     bhk: Optional[int] = Field(None, ge=1, le=10)
     property_type: Optional[str] = None
@@ -80,7 +83,7 @@ class RecommendationRequest(BaseModel):
     max_transfers: Optional[int] = Field(None, ge=0, le=5)
     max_walk_minutes: Optional[int] = Field(None, ge=1, le=60)
     preferred_modes: List[str] = Field(
-        default_factory=lambda: ["TRANSIT", "TWO_WHEELER", "DRIVE"]
+        default_factory=lambda: ["TRANSIT", "TWO_WHEELER", "DRIVE", "WALK"]
     )
 
     # ── Worker / income ───────────────────────────────────────────────────────
@@ -96,6 +99,12 @@ class RecommendationRequest(BaseModel):
 
     # ── Work days (affects monthly transport cost) ────────────────────────────
     work_days_per_month: int = Field(22, ge=1, le=31)
+
+    # ── Source tier filter ───────────────────────────────────────────────────
+    source_categories: Optional[List[str]] = Field(
+        default=None,
+        description="Filter by tier: CURRENT, RECENT, PERIODIC, DEMO",
+    )
 
     # ── Response options ──────────────────────────────────────────────────────
     page: int = Field(1, ge=1)
@@ -114,10 +123,17 @@ class RecommendationRequest(BaseModel):
 # Output
 # ─────────────────────────────────────────────────────────────────────────────
 class FacilityAccess(BaseModel):
-    """Travel time and count for a nearby facility type."""
+    """
+    Travel time and accessibility for a nearby facility type.
+    Used inside RecommendationResult for school / hospital / pharmacy.
+    """
+    nearest_name: Optional[str] = None
     nearest_minutes: Optional[float] = None
+    distance_m: Optional[float] = None
     count_within_threshold: Optional[int] = None
     meets_threshold: Optional[bool] = None
+    facility_status: str = "available"  # available | unavailable | insufficient_data
+    source_name: Optional[str] = None
 
 
 class AffordabilityBreakdown(BaseModel):
@@ -165,6 +181,16 @@ class RecommendationResult(BaseModel):
     longitude: Optional[float] = None
     rent_monthly: Optional[float] = None
     maintenance_monthly: Optional[float] = None
+    deposit: Optional[float] = None
+    address: Optional[str] = None
+    # Nearest facilities grounded in real infrastructure
+    nearest_facilities: Optional[dict] = None
+    # Phase 8 Real Rental Metadata
+    availability_status: Optional[str] = "AVAILABLE"
+    verification_status: Optional[str] = "UNVERIFIED"
+    geocode_confidence: Optional[str] = "MEDIUM"
+    source_name: Optional[str] = None
+    observed_at: Optional[datetime] = None
     # Routing
     best_route: Optional[RouteResult] = None
     all_routes: List[RouteResult] = Field(default_factory=list)
@@ -179,10 +205,14 @@ class RecommendationResult(BaseModel):
     score_components: dict = Field(default_factory=dict)
     # Explainability
     explainability: Optional[ExplainabilityBlock] = None
+    rejection_reasons: List[str] = Field(default_factory=list)
     # Metadata
     data_freshness: DataFreshness = DataFreshness.ESTIMATED
     first_seen_at: Optional[datetime] = None
     last_seen_at: Optional[datetime] = None
+    # Phase 9 Rent Intelligence & Market Comparison
+    market_comparison: Optional[MarketComparison] = None
+    rent_percentiles: Optional[dict] = None
 
 
 class RecommendationResponse(BaseModel):
@@ -191,4 +221,36 @@ class RecommendationResponse(BaseModel):
     page: int
     page_size: int
     results: List[RecommendationResult]
+    rejected_results: List[RecommendationResult] = Field(default_factory=list)
     search_metadata: dict = Field(default_factory=dict)
+
+
+class RecommendationDetailRequest(BaseModel):
+    """
+    POST /api/v1/recommendations/detail
+    Requests deep live detail for one selected home (Task 8 & 16).
+    """
+    listing_id: str
+    workplace_lat: float = Field(..., ge=-90, le=90)
+    workplace_lon: float = Field(..., ge=-180, le=180)
+    workplace_label: Optional[str] = None
+    preferred_modes: List[str] = Field(
+        default_factory=lambda: ["TRANSIT", "DRIVE", "TWO_WHEELER", "WALK"]
+    )
+    worker: Optional[WorkerContext] = None
+    family: Optional[FamilyContext] = None
+    departure_time: Optional[datetime] = None
+    work_days_per_month: int = Field(22, ge=1, le=31)
+
+
+class RecommendationDetailResponse(BaseModel):
+    """
+    Deep detail response for the selected home.
+    Includes full multimodal transit itinerary, road routes, live facilities,
+    affordability breakdown, and truthful provenance metadata.
+    """
+    result: RecommendationResult
+    rental_source_notice: str = "Rental source: Demo / seeded dataset (CMRL-anchored)"
+    google_status: str = "AVAILABLE"
+    request_summary: dict = Field(default_factory=dict)
+

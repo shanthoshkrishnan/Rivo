@@ -33,6 +33,8 @@ from app.schemas.misc import (
     ScenarioResponse,
 )
 
+from app.services.algorithms.scenario_engine import evaluate_spatial_scenario
+
 router = APIRouter(prefix="/scenarios", tags=["scenarios"])
 
 
@@ -41,39 +43,14 @@ router = APIRouter(prefix="/scenarios", tags=["scenarios"])
     response_model=ScenarioResponse,
     summary="Evaluate a housing or transit scenario",
     description=(
-        "Compute before/after accessibility metrics for a planning scenario. "
-        "Results are ESTIMATED from the current DB state + scenario parameters. "
-        "Requires occupation_key to determine relevant job sites and income bands."
+        "Compute before/after accessibility metrics for a planning scenario using "
+        "deterministic spatial station buffer and demographic calculations. "
+        "Results are ESTIMATED from GCC Ward density, PLFS 2025, and CUMTA GTFS assets."
     ),
 )
 async def evaluate_scenario(request: ScenarioRequest) -> ScenarioResponse:
-    """
-    MVP implementation: computes rough delta estimates.
-    Full R5-based batch accessibility is planned for a later iteration.
-    """
     scenario_id = str(uuid.uuid4())[:12]
-
-    # Base metrics (from DB in future; fixture for MVP)
-    before = _baseline_metrics(request.occupation_key)
-    after = _apply_scenario(before, request)
-
-    delta_reach = None
-    delta_listings = None
-    if after.worker_reach_45min is not None and before.worker_reach_45min is not None:
-        delta_reach = after.worker_reach_45min - before.worker_reach_45min
-    if after.affordable_listings is not None and before.affordable_listings is not None:
-        delta_listings = after.affordable_listings - before.affordable_listings
-
-    return ScenarioResponse(
-        scenario_id=scenario_id,
-        occupation_key=request.occupation_key,
-        before=before,
-        after=after,
-        delta_worker_reach_45min=delta_reach,
-        delta_affordable_listings=delta_listings,
-        computed_at=datetime.now(timezone.utc),
-        data_freshness=DataFreshness.ESTIMATED,
-    )
+    return evaluate_spatial_scenario(request, scenario_id)
 
 
 def _baseline_metrics(occupation_key: str) -> ScenarioMetrics:

@@ -31,29 +31,33 @@ from app.core.logging import logger
 settings = get_settings()
 
 _redis_client: Optional[aioredis.Redis] = None
+_redis_checked: bool = False
+_redis_available: bool = False
+_memory_cache: dict[str, tuple[float, Any]] = {}
 
 
-async def get_redis() -> aioredis.Redis:
-    """Return (and lazily create) the singleton Redis client."""
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = aioredis.from_url(
-            settings.REDIS_URL,
-            encoding="utf-8",
-            decode_responses=True,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-        )
-        # Verify connection
+async def get_redis() -> Optional[aioredis.Redis]:
+    """Return (and lazily create) the singleton Redis client with in-memory fallback."""
+    global _redis_client, _redis_checked, _redis_available
+    if not _redis_checked:
+        _redis_checked = True
         try:
-            await _redis_client.ping()
-            logger.info("Redis connected", url=settings.REDIS_URL)
-        except Exception as exc:
-            logger.warning(
-                "Redis unavailable — caching disabled", error=str(exc)
+            client = aioredis.from_url(
+                settings.REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_connect_timeout=0.4,
+                socket_timeout=0.4,
             )
+            await client.ping()
+            _redis_client = client
+            _redis_available = True
+            logger.info("Redis connected", url=settings.REDIS_URL)
+        except Exception:
+            logger.info("Redis not active; activated zero-overhead in-memory cache")
             _redis_client = None
-    return _redis_client
+            _redis_available = False
+    return _redis_client if _redis_available else None
 
 
 def make_cache_key(domain: str, **params: Any) -> str:
@@ -62,17 +66,6 @@ def make_cache_key(domain: str, **params: Any) -> str:
 
     The parameters dict is sorted and JSON-serialised before hashing so
     key order does not matter.
-
-    Example:
-        make_cache_key(
-            "route",
-            origin="13.0827,80.2707",
-            destination="13.0569,80.2425",
-            mode="TRANSIT",
-            departure_bucket="08:00",
-            provider="google",
-        )
-        → "rivo:route:a3f2..."
     """
     payload = json.dumps(params, sort_keys=True, ensure_ascii=False)
     digest = hashlib.sha256(payload.encode()).hexdigest()[:16]
@@ -81,44 +74,55 @@ def make_cache_key(domain: str, **params: Any) -> str:
 
 async def cache_get(key: str) -> Optional[Any]:
     """
-    Retrieve a cached value.  Returns None on miss or Redis unavailability.
+    Retrieve a cached value. Returns None on miss.
+    Transparently uses in-memory cache when Redis is offline.
     """
+    import time
+    now = time.time()
+    if key in _memory_cache:
+        expire_at, val = _memory_cache[key]
+        if now < expire_at:
+            return val
+        _memory_cache.pop(key, None)
+
     client = await get_redis()
-    if client is None:
-        return None
-    try:
-        raw = await client.get(key)
-        if raw is None:
-            return None
-        return json.loads(raw)
-    except Exception as exc:
-        logger.warning("Cache GET failed", key=key, error=str(exc))
-        return None
+    if client is not None:
+        try:
+            raw = await client.get(key)
+            if raw is not None:
+                val = json.loads(raw)
+                _memory_cache[key] = (now + 60.0, val)
+                return val
+        except Exception as exc:
+            logger.debug("Cache GET failed", key=key, error=str(exc))
+    return None
 
 
 async def cache_set(key: str, value: Any, ttl: int) -> None:
     """
     Store a value in the cache with a TTL (seconds).
-    Silently degrades if Redis is unavailable.
+    Saves to both in-memory store and Redis.
     """
+    import time
+    _memory_cache[key] = (time.time() + ttl, value)
+
     client = await get_redis()
-    if client is None:
-        return
-    try:
-        await client.set(key, json.dumps(value, ensure_ascii=False), ex=ttl)
-    except Exception as exc:
-        logger.warning("Cache SET failed", key=key, error=str(exc))
+    if client is not None:
+        try:
+            await client.set(key, json.dumps(value, ensure_ascii=False), ex=ttl)
+        except Exception as exc:
+            logger.debug("Cache SET failed", key=key, error=str(exc))
 
 
 async def cache_delete(key: str) -> None:
     """Invalidate a cache entry."""
+    _memory_cache.pop(key, None)
     client = await get_redis()
-    if client is None:
-        return
-    try:
-        await client.delete(key)
-    except Exception as exc:
-        logger.warning("Cache DELETE failed", key=key, error=str(exc))
+    if client is not None:
+        try:
+            await client.delete(key)
+        except Exception as exc:
+            logger.debug("Cache DELETE failed", key=key, error=str(exc))
 
 
 async def close_redis() -> None:

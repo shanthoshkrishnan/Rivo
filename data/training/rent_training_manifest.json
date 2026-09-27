@@ -1,0 +1,32 @@
+{
+  "manifest_version": "1.0.0",
+  "dataset_version": "2026.09-uncalibrated-v0",
+  "generated_at": "2026-09-27T05:25:00Z",
+  "status": "NOT_READY_INSUFFICIENT_DATA",
+  "sources": [
+    "RIVO Direct (Owner Verified)",
+    "Chennai Open Rental Dataset"
+  ],
+  "date_range": {
+    "start": null,
+    "end": null,
+    "temporal_depth_days": 0
+  },
+  "counts": {
+    "total_observations_collected": 0,
+    "eligible_real_observations": 0,
+    "unique_properties": 0,
+    "unique_localities": 0,
+    "unique_bhk_classes": 0
+  },
+  "exclusions": {
+    "demo_rows_excluded": 88,
+    "synthetic_rows_excluded": 88,
+    "out_of_bounds_coordinates_excluded": 0,
+    "impossible_rents_excluded": 0
+  },
+  "model_eligibility": {
+    "is_eligible": false,
+    "safeguard_message": "Insufficient real rental observations for ML training. Model training blocked."
+  }
+}

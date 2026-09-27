@@ -33,32 +33,49 @@
 ## Components
 
 ### Frontend
-- Next.js
-- TypeScript
-- Tailwind
-- MapLibre GL JS
-- ECharts/Recharts
+- React 19 + TypeScript + Vite
+- Tailwind CSS (vanilla CSS design tokens)
+- Leaflet (warm Carto Positron basemap, route polylines, facility markers)
+- Lucide React icons
 
 ### Backend
-- FastAPI
-- Pydantic
-- SQLAlchemy/SQLModel
+- FastAPI (Python 3.11)
+- Pydantic v2
+- SQLAlchemy 2.0 (AsyncSession via asyncpg / aiosqlite fallback)
+- Alembic migrations
 
-### Data
-- PostgreSQL + PostGIS
-- H3
-- DuckDB
-- Parquet/GeoParquet
-- GeoPandas/Shapely
-- Pandas/Polars
+### Data & Spatial Storage
+- PostgreSQL + PostGIS (primary production)
+- Standalone SQLite (`data/rivo.db`) with custom spatial function stubs for local demo/testing
+- H3 resolution 9 spatial indexing (with pure-Python fallback for secured OS runtimes)
+- Authoritative seed fixtures (UDISE+ schools, OGD Chennai Health hospitals, OSM pharmacies, CUMTA GTFS stops)
 
-### Routing
-MVP:
-- Google Routes API: live user-facing route comparison
-- OpenTripPlanner 2.10: open/reproducible transit routing
+### Routing Chain
+Priority order:
+1. Google Routes API (live on-demand, when API key is provided)
+2. `GTFSRouteProvider` (local deterministic multimodal routing across 5,626 CUMTA/CMRL stops with real published fares and GeoJSON polylines)
+3. OpenTripPlanner 2.10 (reproducible transit router fallback)
+4. `MockRouteProvider` (offline emergency fallback, clearly labelled ESTIMATED)
 
-Later:
-- R5 for batch accessibility/scenarios
+### Route Caching
+- Deterministic 4-decimal-place coordinate rounding (~11m spatial resolution)
+- 30-minute departure time bucketing
+- Memory LRU cache with TTL expiration (`ROUTE_CACHE_TTL = 3600s`)
+- Persistent `route_cache` table schema
+- Strict cache freshness semantics: Cached results are downgraded to `RECENT`, never presented as `LIVE`.
+
+### Family Accessibility Funnel (Phase 4 — Task 5)
+Cost-controlled multi-stage resolution:
+1. Cheap Spatial Pre-Filter: Radius-bounded candidate discovery (up to 3 closest per facility type).
+2. Nearby Search: Uses `GooglePlacesProvider` when configured, or verified local facility datasets (UDISE+, OGD Health, OSM).
+3. Finalist Routing: Live Google Routes walking route is requested ONLY for the best candidate of finalist listings (never for all facilities around all rentals).
+4. Exact Walking Evaluation: Actual door-to-door walking duration from Google Routes or calibrated 4.5 km/h walking speed model.
+
+### Data Refresh Pipeline (Phase 4 — Task 8)
+- Provider-aware reconciliation: `POST /api/v1/data/refresh` and `python -m scripts.refresh_data`.
+- Flow: `NEW DATA -> VALIDATE -> DEDUPLICATE -> UPSERT -> MARK OBSERVED_AT`.
+- Audits active rental candidates, Google Places connectivity, and periodic GTFS network feeds (CMRL & MTC).
+- Safe failure handling: Never destroys working cache or active data if a refresh source is unreachable.
 
 ## Domain modules
 

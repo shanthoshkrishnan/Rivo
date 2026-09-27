@@ -3,24 +3,33 @@
 @layer base {
   :root {
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --bg-canvas: #FAF8F5;
-    --bg-surface: #FFFFFF;
-    --bg-muted: #F5EFEB;
-    --border-subtle: #EBE4DC;
-    --border-strong: #D9CEBF;
-    --text-primary: #2C2523;
-    --text-secondary: #6B615B;
-    --text-muted: #9E938C;
-    --terracotta-500: #C25E38;
-    --terracotta-600: #AB4E2A;
-    --amber-500: #D9822B;
-    --sage-600: #3E7353;
+    
+    /* New RIVO Brand System */
+    --rivo-navy: #0B1F3A;
+    --rivo-navy-light: #162B4E;
+    --rivo-blue: #1261D6;
+    --rivo-blue-hover: #0E4EB0;
+    --rivo-blue-light: #1DA1F2;
+    --rivo-yellow: #F7C948;
+    --rivo-yellow-hover: #EAB308;
+    
+    /* Surfaces */
+    --rivo-white: #FFFFFF;
+    --rivo-surface-subtle: #F4F8FC;
+    --rivo-surface-alt: #F7F9FC;
+    --rivo-surface-blue: #EEF5FF;
+    
+    /* Typography & Borders */
+    --rivo-text: #102033;
+    --rivo-muted: #607080;
+    --rivo-border: #E2E8F0;
+    --rivo-border-subtle: #EDF2F7;
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #FAF8F5;
-    color: #2C2523;
+    background-color: var(--rivo-white);
+    color: var(--rivo-text);
     margin: 0;
     padding: 0;
     min-height: 100vh;
@@ -34,33 +43,12 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #FAF8F5;
+  background: #F4F8FC;
 }
 ::-webkit-scrollbar-thumb {
-  background: #DDD5CB;
+  background: #CBD5E1;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #C4B9AD;
-}
-
-/* Leaflet map customization to fit warm minimalist aesthetic */
-.leaflet-container {
-  font-family: inherit !important;
-  background-color: #F4EFEA !important;
-}
-.leaflet-popup-content-wrapper {
-  background: #FFFFFF !important;
-  color: #2C2523 !important;
-  border-radius: 12px !important;
-  box-shadow: 0 10px 25px -5px rgba(44, 37, 35, 0.08), 0 8px 10px -6px rgba(44, 37, 35, 0.05) !important;
-  border: 1px solid #EBE4DC !important;
-  padding: 2px !important;
-}
-.leaflet-popup-tip {
-  background: #FFFFFF !important;
-}
-.leaflet-popup-content {
-  margin: 12px 14px !important;
-  line-height: 1.4 !important;
+  background: #94A3B8;
 }

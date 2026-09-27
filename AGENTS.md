@@ -36,6 +36,11 @@ Do not replace those requirements with the family feature. Family context is an 
 - Do not route every listing against every destination.
 - Do not build India-wide support in the 14-hour MVP.
 - Do not introduce microservices, Kafka, Spark or Kubernetes for the MVP.
+- CRITICAL: DO NOT CALL LIVE GOOGLE APIs DURING DEVELOPMENT.
+  - RIVO_LIVE_API_TESTS defaults to false.
+  - Normal pytest, unit tests, and integration tests MUST make 0 Google API calls.
+  - Use mocked Google responses, fixtures, and GTFS.
+  - Real Google live tests (tests/live/*, verify_live_google.py, live_smoke_test.py) must SKIP or refuse by default.
 
 ## Recommended stack
 Frontend:
